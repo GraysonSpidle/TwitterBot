@@ -24,8 +24,8 @@ import twitter4j.conf.ConfigurationBuilder;
 
 public class FileUtils {
 	
-	private static final String CONSUMER_KEY = "nE73hD0zYynB3ys7jKocbOA2C";
-	private static final String CONSUMER_SECRET = "vQvzq9anBNDA5RXDqbmLrA5gC83R1RlsXZwauYXMbcjBRzztlH";
+	private static final String CONSUMER_KEY = "";
+	private static final String CONSUMER_SECRET = "";
 	
 	public static void write(String userScreenName) { 
 		try (PrintStream out = new PrintStream(new FileOutputStream("blacklist.txt"))) {
