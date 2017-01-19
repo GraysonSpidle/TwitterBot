@@ -8,6 +8,7 @@ import javax.swing.*;
 
 public class EnterPinUI extends JFrame {
 	
+	private static final long serialVersionUID = 9065202656050060345L;
 	private JPanel contentPane = new JPanel();
 	private JTextField field = new JTextField();
 	private JButton button = new JButton();

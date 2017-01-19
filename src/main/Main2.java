@@ -25,7 +25,7 @@ import twitter4j.TwitterFactory;
 import twitter4j.User;
 import twitter4j.conf.ConfigurationBuilder;
 
-public class Main {
+public class Main2 {
 	
 	private static final int FIFTEEN_MINUTES_IN_MILISECONDS = 900000;
 	

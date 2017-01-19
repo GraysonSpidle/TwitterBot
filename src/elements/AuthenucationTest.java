@@ -2,11 +2,6 @@ package elements;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import twitter4j.Twitter;
 import twitter4j.TwitterException;
@@ -17,8 +12,8 @@ import twitter4j.conf.ConfigurationBuilder;
 
 public class AuthenucationTest {
 
-	private static final String CONSUMER_KEY = "";
-	private static final String CONSUMER_SECRET = "";
+	private static final String CONSUMER_KEY = "TJxsh4CCCAnH0gs5nusxNGTVE";
+	private static final String CONSUMER_SECRET = "bZIFmy1jToFv9IvUxQKcIu0vNMSqMT2TcqSGDgHwbpyNoEtujZ";
 	
 	public static ActionListener pinReciever; 
 	
