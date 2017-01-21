@@ -47,9 +47,10 @@ Temporary Items
 .apdisk
 .classpath
 *.project
-.settings/org.eclipse.jdt.core.prefs
+*.settings
 *.prefs
 *.class
 *.MF
-target/classes/META-INF/maven/TwitterAutoPost/TwitterAutoPost/pom.properties
+target
 *.xml
+bin

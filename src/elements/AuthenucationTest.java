@@ -79,7 +79,6 @@ public class AuthenucationTest {
 			}
 		}
 		FileUtils.write(accessToken.getToken(), accessToken.getTokenSecret());
-		System.exit(0);
 	}
 
 }

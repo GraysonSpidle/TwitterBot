@@ -1,11 +1,18 @@
 package main;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
+import java.util.Calendar;
+import java.util.Collection;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import com.google.code.chatterbotapi.ChatterBot;
 import com.google.code.chatterbotapi.ChatterBotFactory;
@@ -13,8 +20,9 @@ import com.google.code.chatterbotapi.ChatterBotSession;
 import com.google.code.chatterbotapi.ChatterBotType;
 
 import elements.AuthenucationTest;
-import elements.FileUtils;
 import elements.AuthenucationUI;
+import elements.Constants;
+import elements.FileUtils;
 import twitter4j.DirectMessage;
 import twitter4j.ResponseList;
 import twitter4j.Status;
@@ -25,17 +33,22 @@ import twitter4j.TwitterFactory;
 import twitter4j.User;
 import twitter4j.conf.ConfigurationBuilder;
 
-public class Main4 {
+/**
+ * In this version, the capability of keeping track of previous responses was implemented
+ * @author Grayson Spidle
+ *
+ */
+public class Main5 {
 	
 	private static final int FIFTEEN_MINUTES_IN_MILISECONDS = 900000;
 	
 	public static String BOT_HANDLE = "";
 	
-	private static final String CONSUMER_KEY = "TJxsh4CCCAnH0gs5nusxNGTVE";
-	private static final String CONSUMER_SECRET = "bZIFmy1jToFv9IvUxQKcIu0vNMSqMT2TcqSGDgHwbpyNoEtujZ";
+	private static final String CONSUMER_KEY = "";
+	private static final String CONSUMER_SECRET = "";
 	
-	private static String accessToken = "";
-	private static String accessTokenSecret = "";
+	private static String accessToken;
+	private static String accessTokenSecret;
 	
 	private static Twitter twitter;
 	
@@ -200,13 +213,24 @@ public class Main4 {
 	 * @param arg0 The status for the bot to reply to.
 	 */
 	private static void respond(Status arg0) { 
-		String message = arg0.getText();
+		String message = removeUrls(arg0.getText());
 		String name = arg0.getUser().getScreenName();
 		try {
 			System.out.println("Attempting to respond to @" + name + ": " + message);
 			if (!isUserUnsubscribed(arg0.getUser())) {
-				String response = "@" + name + " " + session.think(removeUrls(message));
-				StatusUpdate update = new StatusUpdate(response).inReplyToStatusId(arg0.getId());
+				String response = session.think(message);
+				boolean isPrevious = true;
+				boolean isResponseALetterCount = true;
+				while (isPrevious) {
+					response = session.think(message);
+					isPrevious = isAPreviousResponse(response);
+				}
+				while (isResponseALetterCount) {
+					response = session.think(message);
+					isResponseALetterCount = isALetterCountResponse(response);
+				}
+				write(response);
+				StatusUpdate update = new StatusUpdate("@" + name + " " + response).inReplyToStatusId(arg0.getId());
 				twitter.updateStatus(update);
 				System.out.println("Successfully responded to @" + name + ": " + response);
 			}
@@ -314,5 +338,101 @@ public class Main4 {
 			}
 		}
 		return filteredInput;
+	}
+	
+	private static void write(String s) {
+		Calendar cal = advanceAWeek(Calendar.getInstance());
+		int day = cal.get(Calendar.DAY_OF_YEAR);
+		int year = cal.get(Calendar.YEAR);
+		s = s.trim() + "\t" + String.valueOf(day) + ":" + String.valueOf(year) + "\n";
+		try {
+			Files.write(Constants.PREVIOUS_RESPONSES.toPath(), s.getBytes(), StandardOpenOption.APPEND);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private static List<String> getPreviousResponses() {
+		try {
+			ConcurrentSkipListSet<String> lines = new ConcurrentSkipListSet<String>();
+			lines.addAll(Files.readAllLines(Constants.PREVIOUS_RESPONSES.toPath()));
+			List<String> output = new Vector<String>();
+			for (String s : lines) {
+				if (hasResponseExpired(s)) {
+					lines.remove(s);
+				}
+				else {
+					StringTokenizer st = new StringTokenizer(s, "\t");
+					output.add(st.nextToken());
+				}
+			}
+			System.out.println(lines.size());
+			updateResponses(lines);
+			return output;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	private static boolean isAPreviousResponse(String arg0) {
+		for (String s : getPreviousResponses()) {
+			if (s.equals(arg0)) return true;
+		}
+		return false;
+	}
+	
+	private static boolean isALetterCountResponse(String arg0) {
+		StringTokenizer st = new StringTokenizer(arg0, " ");
+		while (st.hasMoreTokens()) {
+			String token = st.nextToken();
+			try {
+				Integer.parseInt(token);
+				if (token.equals("letters")) {
+					return true;
+				}
+			} catch (NumberFormatException e) {
+				// Nothing
+			}
+		}
+		return false;
+	}
+	
+	private static boolean hasResponseExpired(String line) {
+		try {
+			StringTokenizer st = new StringTokenizer(line, "\t");
+			st.nextToken();
+			String date = st.nextToken();
+			st = new StringTokenizer(date, ":");
+			int day = Integer.parseInt(st.nextToken());
+			int year = Integer.parseInt(st.nextToken());
+			Calendar cal = Calendar.getInstance();
+			cal.set(Calendar.DAY_OF_YEAR, day);
+			cal.set(Calendar.YEAR, year);
+			return cal.before(Calendar.getInstance());
+		} catch (NoSuchElementException e) {
+			return false;
+		}
+	}
+	
+	private static Calendar advanceAWeek(Calendar arg0) {
+		Calendar output = Calendar.getInstance();
+		int day = arg0.get(Calendar.DAY_OF_YEAR) + 7;
+		int year = arg0.get(Calendar.YEAR);
+		if (day > 365) {
+			day = day - 365;
+			year++;
+		}
+		output.set(Calendar.DAY_OF_YEAR, day);
+		output.set(Calendar.YEAR, year);
+		return output;
+	}
+	
+	private static void updateResponses(Collection<String> lines) throws IOException {
+		Files.write(Constants.PREVIOUS_RESPONSES.toPath(), "".getBytes(), StandardOpenOption.TRUNCATE_EXISTING);
+		for (String s : lines) {
+			s = s + "\n";
+			Files.write(Constants.PREVIOUS_RESPONSES.toPath(), s.getBytes(), StandardOpenOption.APPEND);
+		}
 	}
 }

@@ -22,15 +22,9 @@ import main.Main;
 
 public class FileUtils {
 
-	public static final File BANNED_RESPONSES = new File("bannedResponses.txt");
-	public static final File PREVIOUS_RESPONSES = new File("previousResponses.txt");
-	public static final File LAST_ID = new File("lastID.txt");
-	public static final File BLACKLIST = new File("blacklist.txt");
-	public static final File ACCESS_KEYS = new File("accessKeys.txt");
-
 	public static void write(String userScreenName) {
 		try {
-			Files.write(BLACKLIST.toPath(), userScreenName.getBytes(), StandardOpenOption.APPEND);
+			Files.write(Constants.BLACKLIST.toPath(), userScreenName.getBytes(), StandardOpenOption.APPEND);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -41,8 +35,8 @@ public class FileUtils {
 
 	public static void write(String accessKey, String accessKeySecret) {
 		try {
-			Files.write(ACCESS_KEYS.toPath(), accessKey.getBytes());
-			Files.write(ACCESS_KEYS.toPath(), accessKeySecret.getBytes(), StandardOpenOption.APPEND);
+			Files.write(Constants.ACCESS_KEYS.toPath(), accessKey.getBytes());
+			Files.write(Constants.ACCESS_KEYS.toPath(), accessKeySecret.getBytes(), StandardOpenOption.APPEND);
 		} catch (FileNotFoundException e1) {
 			System.err.println("Unable to find the the file.");
 			e1.printStackTrace();
@@ -61,7 +55,7 @@ public class FileUtils {
 			}
 		}
 		try {
-			Files.write(BANNED_RESPONSES.toPath(), response.getBytes(), StandardOpenOption.APPEND);
+			Files.write(Constants.BANNED_RESPONSES.toPath(), response.getBytes(), StandardOpenOption.APPEND);
 		} catch (IOException e) {
 			System.err.println("Unable to update the banned response list. Exiting...");
 			e.printStackTrace();
@@ -77,7 +71,7 @@ public class FileUtils {
 	public static void write(long id) {
 		try {
 			if (id > FileUtils.getLastRecentReplyID()) {
-				Files.write(LAST_ID.toPath(), String.valueOf(id).getBytes());
+				Files.write(Constants.LAST_ID.toPath(), String.valueOf(id).getBytes());
 				System.out.println("Successfully updated the previous id to " + id + ". ");
 			}
 		} catch (FileNotFoundException e) {
@@ -106,7 +100,7 @@ public class FileUtils {
 					// Nothing
 				}
 			}
-			Files.write(PREVIOUS_RESPONSES.toPath(), (getToday() + " " + String.valueOf(modifiedResponse)).getBytes(),
+			Files.write(Constants.PREVIOUS_RESPONSES.toPath(), (getToday() + " " + String.valueOf(modifiedResponse)).getBytes(),
 					StandardOpenOption.APPEND);
 		} catch (FileNotFoundException e) {
 			System.err.println("Unable to find the the file. Exiting...");
@@ -121,7 +115,7 @@ public class FileUtils {
 
 	public static long getLastRecentReplyID() {
 		try {
-			List<String> output = Files.readAllLines(LAST_ID.toPath(), Charset.defaultCharset());
+			List<String> output = Files.readAllLines(Constants.LAST_ID.toPath(), Charset.defaultCharset());
 			return Long.parseLong(output.get(0));
 		} catch (IOException e) {
 			System.err.println("Failed to get the last status id.");
@@ -133,7 +127,7 @@ public class FileUtils {
 
 	public static List<String> getBlacklistedScreenNames() {
 		try {
-			List<String> output = Files.readAllLines(BLACKLIST.toPath(), Charset.defaultCharset());
+			List<String> output = Files.readAllLines(Constants.BLACKLIST.toPath(), Charset.defaultCharset());
 			output.add(Main.BOT_HANDLE);
 			return output;
 		} catch (IOException e) {
@@ -144,7 +138,7 @@ public class FileUtils {
 
 	public static String getKey() throws ArrayIndexOutOfBoundsException {
 		try {
-			List<String> lines = Files.readAllLines(ACCESS_KEYS.toPath(), Charset.defaultCharset());
+			List<String> lines = Files.readAllLines(Constants.ACCESS_KEYS.toPath(), Charset.defaultCharset());
 			return lines.get(0);
 		} catch (IOException e) {
 			System.err.println("Unable to find the the file.");
@@ -155,7 +149,7 @@ public class FileUtils {
 
 	public static String getSecret() {
 		try {
-			List<String> lines = Files.readAllLines(ACCESS_KEYS.toPath(), Charset.defaultCharset());
+			List<String> lines = Files.readAllLines(Constants.ACCESS_KEYS.toPath(), Charset.defaultCharset());
 			return lines.get(1);
 		} catch (IOException e) {
 			System.err.println("Unable to find the the file.");
@@ -167,7 +161,7 @@ public class FileUtils {
 	public static List<String> getBannedResponses() {
 		List<String> output = null;
 		try {
-			output = Files.readAllLines(BANNED_RESPONSES.toPath());
+			output = Files.readAllLines(Constants.BANNED_RESPONSES.toPath());
 		} catch (IOException e) {
 			System.err.println("Unable to get banned responses. Exiting...");
 			e.printStackTrace();
@@ -179,7 +173,7 @@ public class FileUtils {
 	public static List<String> getPreviousResponses() {
 		List<String> output = null;
 		try {
-			output = Files.readAllLines(PREVIOUS_RESPONSES.toPath());
+			output = Files.readAllLines(Constants.PREVIOUS_RESPONSES.toPath());
 		} catch (IOException e) {
 			System.err.println("Unable to get previous responses. Exiting...");
 			e.printStackTrace();
@@ -200,7 +194,7 @@ public class FileUtils {
 	public static List<String> getPreviousResponsesWithDates() {
 		List<String> output = null;
 		try {
-			output = Files.readAllLines(PREVIOUS_RESPONSES.toPath());
+			output = Files.readAllLines(Constants.PREVIOUS_RESPONSES.toPath());
 		} catch (IOException e) {
 			System.err.println("Unable to get previous responses. Exiting...");
 			e.printStackTrace();

@@ -1,11 +1,21 @@
 package main;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import com.google.code.chatterbotapi.ChatterBot;
 import com.google.code.chatterbotapi.ChatterBotFactory;
@@ -13,9 +23,11 @@ import com.google.code.chatterbotapi.ChatterBotSession;
 import com.google.code.chatterbotapi.ChatterBotType;
 
 import elements.AuthenucationTest;
-import elements.FileUtils;
 import elements.AuthenucationUI;
+import elements.Constants;
+import elements.FileUtils;
 import twitter4j.DirectMessage;
+import twitter4j.RateLimitStatus;
 import twitter4j.ResponseList;
 import twitter4j.Status;
 import twitter4j.StatusUpdate;
@@ -25,17 +37,23 @@ import twitter4j.TwitterFactory;
 import twitter4j.User;
 import twitter4j.conf.ConfigurationBuilder;
 
-public class Main4 {
+/**
+ * I don't know if this works... This version implements getting limits and gives the bot the remaining amount of requests it can do so
+ * we don't hit the limits every single time.
+ * @author Grayson Spidle
+ *
+ */
+public class Main6 {
 	
 	private static final int FIFTEEN_MINUTES_IN_MILISECONDS = 900000;
 	
 	public static String BOT_HANDLE = "";
 	
-	private static final String CONSUMER_KEY = "TJxsh4CCCAnH0gs5nusxNGTVE";
-	private static final String CONSUMER_SECRET = "bZIFmy1jToFv9IvUxQKcIu0vNMSqMT2TcqSGDgHwbpyNoEtujZ";
+	private static final String CONSUMER_KEY = "";
+	private static final String CONSUMER_SECRET = "";
 	
-	private static String accessToken = "";
-	private static String accessTokenSecret = "";
+	private static String accessToken;
+	private static String accessTokenSecret;
 	
 	private static Twitter twitter;
 	
@@ -71,25 +89,68 @@ public class Main4 {
 		BOT_HANDLE = twitter.getScreenName(); // Gets the bot's handle
 		
 		while (post) { // Main loop
-			System.out.println(LocalDateTime.now().getHour() + ":" + LocalDateTime.now().getMinute());
-			checkInboxForUnsubscriptions(); // Check for unsubscriptions and blacklist new requests 
-			mentions = getMentions(); // Gets Mentions
-			tweets = getTweets(); // Gets Tweets
-			lastID = FileUtils.getLastRecentReplyID();
-			List<Status> queue = createQueue(mentions, tweets); // Create the queue
-			for (Status s : queue) { // Goes through every status in the queue
-				respond(s); // Responds to them.
-				System.out.println("Sleeping thread for 1 minute...");
-				System.out.println();
-				Thread.sleep(60000); // Delays the next response by 1 minute
+			Map<String, RateLimitStatus> limits = getLimits();
+			RateLimitStatus homeTimeline = limits.get("/statuses/home_timeline");
+			RateLimitStatus mentionsTimeline = limits.get("/statuses/mentions_timeline");
+			RateLimitStatus messages = limits.get("/direct_messages/show");
+			
+			int messagesRemaining = messages.getRemaining() - 1; // So we don't hit the limit constantly
+			int mentionsRemaining = mentionsTimeline.getRemaining() - 1;
+			int homeRemaining = homeTimeline.getRemaining() - 1;
+			
+			if (!cycle(messagesRemaining, mentionsRemaining, homeRemaining)) {
+				System.err.println("An error ocurred. Exiting...");
+				System.exit(0);
 			}
-			if (queue.size() == 0) {
+			
+			long millis = Math.max(Math.max(homeTimeline.getSecondsUntilReset(), mentionsTimeline.getSecondsUntilReset()), messages.getSecondsUntilReset()) * 1000;
+			System.out.println("Sleeping thread for " + (millis / 60000) + " minutes...");
+			Thread.sleep(millis);
+		}
+	}
+	
+	private static boolean cycle(int messageRequests, int mentionsRequests, int tweetRequests) throws Exception {
+		System.out.println(LocalDateTime.now().getHour() + ":" + LocalDateTime.now().getMinute());
+		for (int i = 0; i < Math.max(tweetRequests, Math.max(messageRequests, mentionsRequests)); i++) {
+			boolean doMessages = messageRequests == 0;
+			boolean doMentions = mentionsRequests == 0;
+			boolean doTweets = tweetRequests == 0;
+			
+			if (doMessages) checkInboxForUnsubscriptions(); // Check for unsubscriptions and blacklist new requests 
+			if (doMentions) mentions = getMentions();
+			else mentions = null;
+			if (doTweets) tweets = getTweets();
+			else tweets = null;
+			lastID = FileUtils.getLastRecentReplyID();
+			List<Status> queue = null;
+			
+			if (doMentions && doTweets) {
+				queue = createQueue(mentions, tweets); // Create the queue
+				for (Status s : queue) { // Goes through every status in the queue
+					respond(s); // Responds to them.
+					System.out.println("Sleeping thread for 1 minute...");
+					System.out.println();
+					Thread.sleep(60000); // Delays the next response by 1 minute
+				}
+				if (queue.size() == 0) {
+					System.out.println("Sleeping thread for 1 minute...");
+					System.out.println();
+					Thread.sleep(60000);
+				}
+				System.out.println("*****************************");
+			}
+			else {
+				System.out.println("Did not reply to mentions and/or tweets because limit was reached.");
 				System.out.println("Sleeping thread for 1 minute...");
 				System.out.println();
 				Thread.sleep(60000);
 			}
-			System.out.println("*****************************");
+			
+			messageRequests--;
+			mentionsRequests--;
+			tweetRequests--;
 		}
+		return true;
 	}
 	
 	/**
@@ -200,13 +261,24 @@ public class Main4 {
 	 * @param arg0 The status for the bot to reply to.
 	 */
 	private static void respond(Status arg0) { 
-		String message = arg0.getText();
+		String message = removeUrls(arg0.getText());
 		String name = arg0.getUser().getScreenName();
 		try {
 			System.out.println("Attempting to respond to @" + name + ": " + message);
 			if (!isUserUnsubscribed(arg0.getUser())) {
-				String response = "@" + name + " " + session.think(removeUrls(message));
-				StatusUpdate update = new StatusUpdate(response).inReplyToStatusId(arg0.getId());
+				String response = session.think(message);
+				boolean isPrevious = true;
+				boolean isResponseALetterCount = true;
+				while (isPrevious) {
+					response = session.think(message);
+					isPrevious = isAPreviousResponse(response);
+				}
+				while (isResponseALetterCount) {
+					response = session.think(message);
+					isResponseALetterCount = isALetterCountResponse(response);
+				}
+				write(response);
+				StatusUpdate update = new StatusUpdate("@" + name + " " + response).inReplyToStatusId(arg0.getId());
 				twitter.updateStatus(update);
 				System.out.println("Successfully responded to @" + name + ": " + response);
 			}
@@ -314,5 +386,123 @@ public class Main4 {
 			}
 		}
 		return filteredInput;
+	}
+	
+	private static void write(String s) {
+		Calendar cal = advanceAWeek(Calendar.getInstance());
+		int day = cal.get(Calendar.DAY_OF_YEAR);
+		int year = cal.get(Calendar.YEAR);
+		s = s.trim() + "\t" + String.valueOf(day) + ":" + String.valueOf(year) + "\n";
+		try {
+			Files.write(Constants.PREVIOUS_RESPONSES.toPath(), s.getBytes(), StandardOpenOption.APPEND);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private static List<String> getPreviousResponses() {
+		try {
+			ConcurrentSkipListSet<String> lines = new ConcurrentSkipListSet<String>();
+			lines.addAll(Files.readAllLines(Constants.PREVIOUS_RESPONSES.toPath()));
+			List<String> output = new Vector<String>();
+			for (String s : lines) {
+				if (hasResponseExpired(s)) {
+					lines.remove(s);
+				}
+				else {
+					StringTokenizer st = new StringTokenizer(s, "\t");
+					output.add(st.nextToken());
+				}
+			}
+			System.out.println(lines.size());
+			updateResponses(lines);
+			return output;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	private static boolean isAPreviousResponse(String arg0) {
+		for (String s : getPreviousResponses()) {
+			if (s.equals(arg0)) return true;
+		}
+		return false;
+	}
+	
+	private static boolean isALetterCountResponse(String arg0) {
+		StringTokenizer st = new StringTokenizer(arg0, " ");
+		while (st.hasMoreTokens()) {
+			String token = st.nextToken();
+			try {
+				Integer.parseInt(token);
+				if (token.equals("letters")) {
+					return true;
+				}
+			} catch (NumberFormatException e) {
+				// Nothing
+			}
+		}
+		return false;
+	}
+	
+	private static boolean hasResponseExpired(String line) {
+		try {
+			StringTokenizer st = new StringTokenizer(line, "\t");
+			st.nextToken();
+			String date = st.nextToken();
+			st = new StringTokenizer(date, ":");
+			int day = Integer.parseInt(st.nextToken());
+			int year = Integer.parseInt(st.nextToken());
+			Calendar cal = Calendar.getInstance();
+			cal.set(Calendar.DAY_OF_YEAR, day);
+			cal.set(Calendar.YEAR, year);
+			return cal.before(Calendar.getInstance());
+		} catch (NoSuchElementException e) {
+			return false;
+		}
+	}
+	
+	private static Calendar advanceAWeek(Calendar arg0) {
+		Calendar output = Calendar.getInstance();
+		int day = arg0.get(Calendar.DAY_OF_YEAR) + 7;
+		int year = arg0.get(Calendar.YEAR);
+		if (day > 365) {
+			day = day - 365;
+			year++;
+		}
+		output.set(Calendar.DAY_OF_YEAR, day);
+		output.set(Calendar.YEAR, year);
+		return output;
+	}
+	
+	private static void updateResponses(Collection<String> lines) throws IOException {
+		Files.write(Constants.PREVIOUS_RESPONSES.toPath(), "".getBytes(), StandardOpenOption.TRUNCATE_EXISTING);
+		for (String s : lines) {
+			s = s + "\n";
+			Files.write(Constants.PREVIOUS_RESPONSES.toPath(), s.getBytes(), StandardOpenOption.APPEND);
+		}
+	}
+	
+	private static Map<String, RateLimitStatus> getLimits() {
+		Map<String, RateLimitStatus> output = new HashMap<String, RateLimitStatus>();
+		Map<String, RateLimitStatus> limits = null;
+		try {
+			limits = twitter.getRateLimitStatus();
+		} catch (TwitterException e1) {
+			e1.printStackTrace();
+		}
+		String[] limitNames = {"/statuses/home_timeline","/statuses/mentions_timeline","/direct_messages/show"};
+		for (Entry<String, RateLimitStatus> e : limits.entrySet()) {
+			boolean match = false;
+			for (String s : limitNames) {
+				if (e.getKey().equals(s)) {
+					match = true;
+					break;
+				}
+			}
+			if (match) output.put(e.getKey(), e.getValue());  
+		}
+		return output;
 	}
 }
